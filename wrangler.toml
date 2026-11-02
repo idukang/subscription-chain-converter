@@ -1,0 +1,61 @@
+# Subscription converter with chain proxy — Cloudflare Workers.
+# The Worker code is src/worker.js; short links, the rule mirror and
+# the refresh status live in the KV namespace bound as "KV".
+name = "subscription-chain-converter"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+# Cloudflare Pages deployment reads this directory instead:
+# `npm run build:pages` bundles the Worker into
+# dist-pages/_worker.js (Pages advanced mode), and the bindings
+# below apply to the Pages project as well. Note Pages has no
+# Cron Triggers — see the README's Pages section for the external
+# refresh options.
+pages_build_output_dir = "dist-pages"
+
+# Optional variable (intentionally NOT declared, so the one-click
+# deploy flow never demands a value for it): setting
+# EXTERNAL_SUBCONVERTER_URL to the base URL of your own external
+# subconverter makes /sub proxy requests whose target is none of
+# the six natively rendered formats (clash, singbox, v2ray, surge,
+# loon, quanx); unset, those requests return 501. Declare it under
+# a [vars] section or in the dashboard only if you need it.
+# REFRESH_TOKEN is NOT a var either: it is a secret, set with
+# `npx wrangler secret put REFRESH_TOKEN` (deploy.sh does it).
+
+# Daily rule-mirror refresh, 04:35 CST (20:35 UTC).
+[triggers]
+crons = ["35 20 * * *"]
+
+# KV namespace holding link:<code>, idx:<hash>, rule:<dst> and
+# meta:rules_status. The id lines below stay commented out: the
+# one-click deploy flow provisions a namespace for this binding
+# itself, and real placeholder ids would be rejected by the
+# deploy API (error 10042). deploy.sh creates the namespaces and
+# uncomments these lines with the real ids filled in; to do it by
+# hand instead:
+#   npx wrangler kv namespace create KV
+#   npx wrangler kv namespace create KV --preview
+[[kv_namespaces]]
+binding = "KV"
+# id = "REPLACE_WITH_KV_ID"
+# preview_id = "REPLACE_WITH_KV_PREVIEW_ID"
+
+# Advanced storage (optional but recommended; used automatically
+# when bound, everything falls back to KV when absent):
+# R2 holds the rule mirror as objects (large binaries, no KV
+# value-size ceiling); D1 holds the short-link records, the
+# content-hash dedupe and per-link hit counts, plus a refresh log.
+# The one-click deploy flow provisions both; deploy.sh creates
+# them too. The D1 schema is created lazily by the Worker itself,
+# no migration step is needed.
+[[r2_buckets]]
+binding = "RULES"
+bucket_name = "subscription-chain-converter-rules"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "subscription-chain-converter"
+# database_id commented out for the same reason as the KV ids
+# above: provisioned by the one-click flow, filled in by deploy.sh.
+# database_id = "REPLACE_WITH_D1_ID"
